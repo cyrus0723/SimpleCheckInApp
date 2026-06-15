@@ -9,11 +9,14 @@
 - 点击“今日打卡”记录当天。
 - 同一天只能打卡一次，已打卡后按钮会禁用。
 - 近 365 天热力图展示打卡记录。
+- 可以自定义记录开始日期，不再限制只能查看近一年。
 - 绿色方块表示已打卡，灰色方块表示未打卡。
 - 今天会显示绿色边框，当前选中的日期会显示黑色边框。
 - 点击任意日期可以查看当天状态。
 - 支持补打卡和删除某一天的记录。
-- 显示近一年打卡次数、最近一次打卡、距离上次打卡天数和平均打卡间隔。
+- 支持多选日期后一次性补打卡。
+- 支持导入文本补打卡，例如 `2025年6月1,3,5,6,7日` 或 `2025-06-01, 2025-06-03`。
+- 显示自定义起始日期以来的打卡次数、最近一次打卡、距离上次打卡天数和平均打卡间隔。
 - 支持将打卡记录导出为 CSV 文本，并通过系统分享面板发送到其他应用。
 - 使用 `SharedPreferences` 本地保存数据，关闭 App 后不会丢失。
 
@@ -63,11 +66,14 @@ date
 - 「今日チェックイン」ボタンで当日の記録を追加。
 - 同じ日は一度だけチェックイン可能。記録済みの場合、ボタンは無効になります。
 - 過去 365 日の記録をヒートマップで表示。
+- 記録の開始日を自由に設定でき、過去 1 年だけに限定されません。
 - 緑のマスはチェックイン済み、灰色のマスは未チェックイン。
 - 今日の日付には緑の枠、選択中の日付には黒い枠を表示。
 - 任意の日付をタップして、その日の状態を確認。
 - 過去の日付への追加チェックインと記録削除に対応。
-- 過去 1 年のチェックイン回数、直近のチェックイン日、前回からの日数、平均間隔を表示。
+- 複数の日付を選択して、一括で追加チェックインできます。
+- テキスト入力から日付をインポートできます。例：`2025年6月1,3,5,6,7日` または `2025-06-01, 2025-06-03`。
+- 設定した開始日以降のチェックイン回数、直近のチェックイン日、前回からの日数、平均間隔を表示。
 - チェックイン記録を CSV テキストとして書き出し、Android の共有シートから他のアプリへ送信可能。
 - `SharedPreferences` にローカル保存するため、アプリを閉じてもデータは保持されます。
 
@@ -117,11 +123,14 @@ Simple Check-In is a lightweight Android app for tracking daily habits, tasks, o
 - Tap “Today Check-In” to record the current day.
 - Each day can be checked in only once. After check-in, the button is disabled.
 - A 365-day heatmap shows recent check-in history.
+- The record start date is customizable, so the view is no longer limited to one year.
 - Green squares mean checked in, and gray squares mean not checked in.
 - Today is highlighted with a green border, while the selected date has a black border.
 - Tap any date to inspect its status.
 - Add a missed check-in or delete a record for a selected date.
-- Shows the number of check-ins in the past year, the latest check-in date, days since the latest check-in, and the average interval.
+- Select multiple dates and add missed check-ins in one action.
+- Import dates from text, such as `2025年6月1,3,5,6,7日` or `2025-06-01, 2025-06-03`.
+- Shows check-in count since the custom start date, the latest check-in date, days since the latest check-in, and the average interval.
 - Export records as CSV text and send them to other apps through the Android share sheet.
 - Data is saved locally with `SharedPreferences`, so it remains after closing the app.
 
