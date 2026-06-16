@@ -1,5 +1,13 @@
 # Simple Check-In / 简单打卡 / シンプルチェックイン
 
+## 开发声明 / 開発について / Development
+
+从 2026 年 6 月 16 日开始，这个项目会由我和好友 XJJ 一起开发。
+
+2026 年 6 月 16 日から、このプロジェクトは私と友人 XJJ が一緒に開発します。
+
+Starting on June 16, 2026, I will develop this project together with my friend XJJ.
+
 ## 中文
 
 简单打卡是一个轻量级 Android 打卡应用，用于记录每天是否完成一次习惯、任务或学习目标。应用不依赖后端，所有数据都保存在本机。
