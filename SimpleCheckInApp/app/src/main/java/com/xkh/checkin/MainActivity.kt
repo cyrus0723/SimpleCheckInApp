@@ -424,7 +424,14 @@ fun CheckInApp(
                     onDelete = { saveNewDates(checkInDates - selectedDateText) }
                 )
 
-                Spacer(modifier = Modifier.weight(0.55f))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                CheckInStats(
+                    checkInDates = visibleDates,
+                    today = today
+                )
+
+                Spacer(modifier = Modifier.weight(0.25f))
 
                 Button(
                     onClick = {
@@ -1071,34 +1078,57 @@ fun CheckInStats(
     checkInDates: List<LocalDate>,
     today: LocalDate
 ) {
+    val displayFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
     val lastCheckIn = checkInDates.lastOrNull()
     val daysSinceLast = lastCheckIn?.let { ChronoUnit.DAYS.between(it, today) }
     val intervals = checkInDates.zipWithNext { a, b -> ChronoUnit.DAYS.between(a, b) }
     val averageInterval = intervals.takeIf { it.isNotEmpty() }?.average()
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            StatLine(
+                label = "最近一次打卡日期",
+                value = lastCheckIn?.format(displayFormatter) ?: "暂无"
+            )
+            StatLine(
+                label = "距离上一次打卡已过去",
+                value = daysSinceLast?.let { "$it 天" } ?: "暂无"
+            )
+            StatLine(
+                label = "平均打卡间隔",
+                value = averageInterval?.let { "%.1f 天".format(it) } ?: "暂无"
+            )
+        }
+    }
+}
+
+@Composable
+fun StatLine(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
-            text = "最近一次：${lastCheckIn?.toString() ?: "暂无"}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF444444)
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF68706A)
         )
         Text(
-            text = when (daysSinceLast) {
-                null -> "距离上次：暂无数据"
-                0L -> "距离上次：今天"
-                else -> "距离上次：${daysSinceLast} 天"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF444444)
-        )
-        Text(
-            text = if (averageInterval == null) {
-                "平均间隔：暂无数据"
-            } else {
-                "平均间隔：约 %.1f 天".format(averageInterval)
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF444444)
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF222222),
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
