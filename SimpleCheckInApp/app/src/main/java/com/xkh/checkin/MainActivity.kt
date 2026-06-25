@@ -50,70 +50,141 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
+data class CheckInTopic(
+    val id: String,
+    val name: String
+)
+
 class MainActivity : ComponentActivity() {
     private val prefsName = "checkin_prefs"
     private val keyDates = "checkin_dates"
     private val keyStartDate = "record_start_date"
+    private val keyTopics = "checkin_topics"
+    private val keySelectedTopicId = "selected_topic_id"
+    private val defaultTopic = CheckInTopic("default", "简单打卡")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             CheckInApp(
-                loadDates = { loadCheckInDates() },
-                saveDates = { saveCheckInDates(it) },
-                loadStartDate = { loadStartDate() },
-                saveStartDate = { saveStartDate(it) }
+                loadTopics = { loadTopics() },
+                saveTopics = { saveTopics(it) },
+                loadSelectedTopicId = { topics -> loadSelectedTopicId(topics) },
+                saveSelectedTopicId = { saveSelectedTopicId(it) },
+                loadDates = { topicId -> loadCheckInDates(topicId) },
+                saveDates = { topicId, dates -> saveCheckInDates(topicId, dates) },
+                loadStartDate = { topicId -> loadStartDate(topicId) },
+                saveStartDate = { topicId, date -> saveStartDate(topicId, date) }
             )
         }
     }
 
-    private fun loadCheckInDates(): Set<String> {
+    private fun loadTopics(): List<CheckInTopic> {
         val prefs = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-        return prefs.getStringSet(keyDates, emptySet())?.toSet() ?: emptySet()
+        val topics = prefs.getString(keyTopics, null)
+            ?.lineSequence()
+            ?.mapNotNull { line ->
+                val parts = line.split("\t", limit = 2)
+                val id = parts.getOrNull(0)?.trim().orEmpty()
+                val name = parts.getOrNull(1)?.trim().orEmpty()
+                if (id.isNotBlank() && name.isNotBlank()) CheckInTopic(id, name) else null
+            }
+            ?.toList()
+            .orEmpty()
+
+        return topics.ifEmpty {
+            listOf(defaultTopic).also { saveTopics(it) }
+        }
     }
 
-    private fun saveCheckInDates(dates: Set<String>) {
+    private fun saveTopics(topics: List<CheckInTopic>) {
+        val uniqueTopics = topics.distinctBy { it.id }
+        val encoded = uniqueTopics.joinToString("\n") { topic ->
+            "${topic.id}\t${topic.name.replace("\t", " ").replace("\n", " ")}"
+        }
         getSharedPreferences(prefsName, Context.MODE_PRIVATE)
             .edit()
-            .putStringSet(keyDates, dates)
+            .putString(keyTopics, encoded)
             .apply()
     }
 
-    private fun loadStartDate(): LocalDate {
+    private fun loadSelectedTopicId(topics: List<CheckInTopic>): String {
         val prefs = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-        val saved = prefs.getString(keyStartDate, null)
+        val saved = prefs.getString(keySelectedTopicId, null)
+        return saved?.takeIf { id -> topics.any { it.id == id } } ?: topics.first().id
+    }
+
+    private fun saveSelectedTopicId(topicId: String) {
+        getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+            .edit()
+            .putString(keySelectedTopicId, topicId)
+            .apply()
+    }
+
+    private fun loadCheckInDates(topicId: String): Set<String> {
+        val prefs = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        return prefs.getStringSet(datesKey(topicId), emptySet())?.toSet() ?: emptySet()
+    }
+
+    private fun saveCheckInDates(topicId: String, dates: Set<String>) {
+        getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet(datesKey(topicId), dates)
+            .apply()
+    }
+
+    private fun loadStartDate(topicId: String): LocalDate {
+        val prefs = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        val saved = prefs.getString(startDateKey(topicId), null)
         return saved?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
             ?: LocalDate.now().minusDays(364)
     }
 
-    private fun saveStartDate(date: LocalDate) {
+    private fun saveStartDate(topicId: String, date: LocalDate) {
         getSharedPreferences(prefsName, Context.MODE_PRIVATE)
             .edit()
-            .putString(keyStartDate, date.format(DateTimeFormatter.ISO_LOCAL_DATE))
+            .putString(startDateKey(topicId), date.format(DateTimeFormatter.ISO_LOCAL_DATE))
             .apply()
+    }
+
+    private fun datesKey(topicId: String): String {
+        return if (topicId == defaultTopic.id) keyDates else "checkin_dates_$topicId"
+    }
+
+    private fun startDateKey(topicId: String): String {
+        return if (topicId == defaultTopic.id) keyStartDate else "record_start_date_$topicId"
     }
 }
 
 @Composable
 fun CheckInApp(
-    loadDates: () -> Set<String>,
-    saveDates: (Set<String>) -> Unit,
-    loadStartDate: () -> LocalDate,
-    saveStartDate: (LocalDate) -> Unit
+    loadTopics: () -> List<CheckInTopic>,
+    saveTopics: (List<CheckInTopic>) -> Unit,
+    loadSelectedTopicId: (List<CheckInTopic>) -> String,
+    saveSelectedTopicId: (String) -> Unit,
+    loadDates: (String) -> Set<String>,
+    saveDates: (String, Set<String>) -> Unit,
+    loadStartDate: (String) -> LocalDate,
+    saveStartDate: (String, LocalDate) -> Unit
 ) {
     val context = LocalContext.current
-    var checkInDates by remember { mutableStateOf(loadDates()) }
     val today = LocalDate.now()
+    var topics by remember { mutableStateOf(loadTopics()) }
+    var selectedTopicId by remember { mutableStateOf(loadSelectedTopicId(topics)) }
+    var checkInDates by remember { mutableStateOf(loadDates(selectedTopicId)) }
     var selectedDate by remember { mutableStateOf(today) }
-    var recordStartDate by remember { mutableStateOf(loadStartDate().coerceAtMost(today)) }
+    var recordStartDate by remember { mutableStateOf(loadStartDate(selectedTopicId).coerceAtMost(today)) }
     var startDateInput by remember { mutableStateOf(recordStartDate.format(DateTimeFormatter.ISO_LOCAL_DATE)) }
     var startDateError by remember { mutableStateOf<String?>(null) }
+    var newTopicName by remember { mutableStateOf("") }
+    var topicNameError by remember { mutableStateOf<String?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var importInput by remember { mutableStateOf("2025年6月1,3,5,6,7日") }
     var importError by remember { mutableStateOf<String?>(null) }
     var multiSelectMode by remember { mutableStateOf(false) }
     var multiSelectedDates by remember { mutableStateOf(emptySet<LocalDate>()) }
 
+    val currentTopic = topics.firstOrNull { it.id == selectedTopicId } ?: topics.first()
     val todayText = today.format(DateTimeFormatter.ISO_LOCAL_DATE)
     val selectedDateText = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
     val hasCheckedToday = checkInDates.contains(todayText)
@@ -125,7 +196,41 @@ fun CheckInApp(
 
     fun saveNewDates(newDates: Set<String>) {
         checkInDates = newDates
-        saveDates(newDates)
+        saveDates(selectedTopicId, newDates)
+    }
+
+    fun switchTopic(topicId: String) {
+        selectedTopicId = topicId
+        saveSelectedTopicId(topicId)
+        checkInDates = loadDates(topicId)
+        val nextStartDate = loadStartDate(topicId).coerceAtMost(today)
+        recordStartDate = nextStartDate
+        startDateInput = nextStartDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        selectedDate = today
+        startDateError = null
+        importError = null
+        multiSelectMode = false
+        multiSelectedDates = emptySet()
+    }
+
+    fun createTopic() {
+        val name = newTopicName.trim()
+        when {
+            name.isBlank() -> topicNameError = "请输入主题名称，例如 起飞、背单词、早睡"
+            topics.any { it.name == name } -> topicNameError = "这个主题已经存在"
+            else -> {
+                val newTopic = CheckInTopic(
+                    id = createTopicId(name, topics.map { it.id }.toSet()),
+                    name = name
+                )
+                val nextTopics = topics + newTopic
+                topics = nextTopics
+                saveTopics(nextTopics)
+                newTopicName = ""
+                topicNameError = null
+                switchTopic(newTopic.id)
+            }
+        }
     }
 
     fun applyStartDate() {
@@ -135,7 +240,7 @@ fun CheckInApp(
             parsed.isAfter(today) -> startDateError = "开始日期不能晚于今天"
             else -> {
                 recordStartDate = parsed
-                saveStartDate(parsed)
+                saveStartDate(selectedTopicId, parsed)
                 selectedDate = selectedDate.coerceAtLeast(parsed)
                 startDateError = null
             }
@@ -155,7 +260,7 @@ fun CheckInApp(
         if (earliest != null && earliest.isBefore(recordStartDate)) {
             recordStartDate = earliest
             startDateInput = earliest.format(DateTimeFormatter.ISO_LOCAL_DATE)
-            saveStartDate(earliest)
+            saveStartDate(selectedTopicId, earliest)
         }
         selectedDate = parsed.maxOrNull() ?: selectedDate
         importError = null
@@ -185,12 +290,27 @@ fun CheckInApp(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "自 ${recordStartDate} 起已打卡 ${visibleDates.size} 次",
+                    text = "当前主题：${currentTopic.name} · 自 ${recordStartDate} 起已打卡 ${visibleDates.size} 次",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFF666666)
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
+
+                TopicSwitcherPanel(
+                    topics = topics,
+                    selectedTopicId = selectedTopicId,
+                    newTopicName = newTopicName,
+                    topicNameError = topicNameError,
+                    onTopicSelected = { switchTopic(it) },
+                    onNewTopicNameChange = {
+                        newTopicName = it
+                        topicNameError = null
+                    },
+                    onCreateTopic = { createTopic() }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = {
@@ -209,7 +329,7 @@ fun CheckInApp(
                         .fillMaxWidth()
                         .height(58.dp)
                 ) {
-                    Text(text = if (hasCheckedToday) "今日已打卡" else "今日打卡")
+                    Text(text = if (hasCheckedToday) "今日「${currentTopic.name}」已打卡" else "今日打卡：${currentTopic.name}")
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -311,7 +431,7 @@ fun CheckInApp(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedButton(
-                    onClick = { exportCheckInData(context, checkInDates) },
+                    onClick = { exportCheckInData(context, checkInDates, currentTopic.name) },
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -336,6 +456,87 @@ fun CheckInApp(
             onDismiss = { showImportDialog = false },
             onImport = { importDates() }
         )
+    }
+}
+
+@Composable
+fun TopicSwitcherPanel(
+    topics: List<CheckInTopic>,
+    selectedTopicId: String,
+    newTopicName: String,
+    topicNameError: String?,
+    onTopicSelected: (String) -> Unit,
+    onNewTopicNameChange: (String) -> Unit,
+    onCreateTopic: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "打卡主题",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                topics.forEach { topic ->
+                    if (topic.id == selectedTopicId) {
+                        Button(
+                            onClick = { onTopicSelected(topic.id) },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF33B56F))
+                        ) {
+                            Text(topic.name)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { onTopicSelected(topic.id) },
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text(topic.name)
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                OutlinedTextField(
+                    value = newTopicName,
+                    onValueChange = onNewTopicNameChange,
+                    singleLine = true,
+                    label = { Text("新主题，例如 起飞、背单词、早睡") },
+                    isError = topicNameError != null,
+                    supportingText = {
+                        Text(topicNameError ?: "每个主题的打卡数据会独立保存")
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = onCreateTopic,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .height(52.dp)
+                ) {
+                    Text("创建")
+                }
+            }
+        }
     }
 }
 
@@ -685,6 +886,24 @@ private fun filterDatesSince(rawDates: Set<String>, startDate: LocalDate, today:
         .sorted()
 }
 
+private fun createTopicId(name: String, existingIds: Set<String>): String {
+    val safeName = name
+        .lowercase()
+        .map { char -> if (char.isLetterOrDigit()) char else '_' }
+        .joinToString("")
+        .trim('_')
+        .take(20)
+        .ifBlank { "topic" }
+    val base = "${safeName}_${System.currentTimeMillis()}"
+    var candidate = base
+    var suffix = 1
+    while (existingIds.contains(candidate)) {
+        candidate = "${base}_$suffix"
+        suffix++
+    }
+    return candidate
+}
+
 private fun parseImportedDates(input: String, defaultYear: Int): Set<LocalDate> {
     val normalized = input
         .replace("，", ",")
@@ -718,22 +937,23 @@ private fun parseImportedDates(input: String, defaultYear: Int): Set<LocalDate> 
     return dates
 }
 
-private fun exportCheckInData(context: Context, rawDates: Set<String>) {
+private fun exportCheckInData(context: Context, rawDates: Set<String>, topicName: String) {
     val dates = rawDates
         .mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
         .sorted()
 
     val csvText = buildString {
+        appendLine("topic,$topicName")
         appendLine("date")
         dates.forEach { appendLine(it.format(DateTimeFormatter.ISO_LOCAL_DATE)) }
     }
 
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/csv"
-        putExtra(Intent.EXTRA_SUBJECT, "简单打卡数据导出")
+        putExtra(Intent.EXTRA_SUBJECT, "${topicName}打卡数据导出")
         putExtra(Intent.EXTRA_TEXT, csvText)
     }
 
-    val chooser = Intent.createChooser(sendIntent, "导出打卡数据")
+    val chooser = Intent.createChooser(sendIntent, "导出${topicName}打卡数据")
     runCatching { context.startActivity(chooser) }
 }

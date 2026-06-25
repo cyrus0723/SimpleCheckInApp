@@ -15,6 +15,8 @@ Starting on June 16, 2026, I will develop this project together with my friend X
 ### 功能
 
 - 点击“今日打卡”记录当天。
+- 支持创建多个打卡主题，例如起飞、背单词、早睡。
+- 不同主题可以自由切换，打卡数据互相独立。
 - 同一天只能打卡一次，已打卡后按钮会禁用。
 - 近 365 天热力图展示打卡记录。
 - 可以自定义记录开始日期，不再限制只能查看近一年。
@@ -72,6 +74,8 @@ date
 ### 機能
 
 - 「今日チェックイン」ボタンで当日の記録を追加。
+- 複数のチェックインテーマを作成できます。例：起飛、英単語、早寝。
+- テーマは自由に切り替えられ、それぞれの記録は独立して保存されます。
 - 同じ日は一度だけチェックイン可能。記録済みの場合、ボタンは無効になります。
 - 過去 365 日の記録をヒートマップで表示。
 - 記録の開始日を自由に設定でき、過去 1 年だけに限定されません。
@@ -129,6 +133,8 @@ Simple Check-In is a lightweight Android app for tracking daily habits, tasks, o
 ### Features
 
 - Tap “Today Check-In” to record the current day.
+- Create multiple check-in topics, such as takeoff, vocabulary, or early sleep.
+- Switch between topics freely. Each topic keeps its own independent data.
 - Each day can be checked in only once. After check-in, the button is disabled.
 - A 365-day heatmap shows recent check-in history.
 - The record start date is customizable, so the view is no longer limited to one year.
