@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -315,7 +318,9 @@ fun CheckInApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0xFFF1FAF3))
-                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                    .statusBarsPadding()
+                    .padding(horizontal = 18.dp)
+                    .padding(top = 18.dp, bottom = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
@@ -419,7 +424,7 @@ fun CheckInApp(
                     onDelete = { saveNewDates(checkInDates - selectedDateText) }
                 )
 
-                Spacer(modifier = Modifier.weight(0.25f))
+                Spacer(modifier = Modifier.weight(0.55f))
 
                 Button(
                     onClick = {
@@ -441,7 +446,7 @@ fun CheckInApp(
                     Text(text = if (hasCheckedToday) "✓ 今日已打卡" else "✓ 今日打卡")
                 }
 
-                Spacer(modifier = Modifier.weight(0.75f))
+                Spacer(modifier = Modifier.weight(0.35f))
             }
         }
     }
@@ -736,9 +741,8 @@ fun YearHeatMap(
     onDateSelected: (LocalDate) -> Unit
 ) {
     val daysBeforeStartWeek = startDate.dayOfWeek.value - 1L
-    val daysAfterEndWeek = 7L - today.dayOfWeek.value
     val gridStartDate = startDate.minusDays(daysBeforeStartWeek)
-    val gridEndDate = today.plusDays(daysAfterEndWeek)
+    val gridEndDate = today
     val totalDays = ChronoUnit.DAYS.between(gridStartDate, gridEndDate).toInt() + 1
     val dates = (0 until totalDays).map { gridStartDate.plusDays(it.toLong()) }
     val weeks = dates.chunked(7)
@@ -758,39 +762,62 @@ fun YearHeatMap(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(heatmapScrollState)
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            monthLabels.forEach { label ->
-                Box(modifier = Modifier.size(width = 18.dp, height = 16.dp)) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF999999)
-                    )
-                }
-            }
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val gap = 4.dp
+        val columnCount = weeks.size.coerceAtLeast(1)
+        val totalGapWidth = gap * (columnCount - 1)
+        val rawCellSize = (maxWidth - totalGapWidth) / columnCount
+        val cellSize = rawCellSize.coerceIn(14.dp, 24.dp)
+        val contentWidth = cellSize * columnCount + totalGapWidth
+        val shouldAlignEnd = contentWidth < maxWidth
+        val rowModifier = if (shouldAlignEnd) Modifier.fillMaxWidth() else Modifier
+        val rowArrangement = if (shouldAlignEnd) {
+            Arrangement.spacedBy(gap, Alignment.End)
+        } else {
+            Arrangement.spacedBy(gap)
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            weeks.forEach { week ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    week.forEach { date ->
-                        val dateText = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                        val enabled = !date.isBefore(startDate) && !date.isAfter(today)
-                        CheckInDayBox(
-                            checked = enabled && checkInDates.contains(dateText),
-                            isToday = enabled && date == today,
-                            isSelected = enabled && date == selectedDate,
-                            isMultiSelected = enabled && multiSelectedDates.contains(date),
-                            enabled = enabled,
-                            onClick = { if (enabled) onDateSelected(date) }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(heatmapScrollState)
+        ) {
+            Row(
+                modifier = rowModifier,
+                horizontalArrangement = rowArrangement
+            ) {
+                monthLabels.forEach { label ->
+                    Box(modifier = Modifier.size(width = cellSize, height = 16.dp)) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF999999)
                         )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier = rowModifier,
+                horizontalArrangement = rowArrangement
+            ) {
+                weeks.forEach { week ->
+                    Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                        week.forEach { date ->
+                            val dateText = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                            val enabled = !date.isBefore(startDate) && !date.isAfter(today)
+                            CheckInDayBox(
+                                checked = enabled && checkInDates.contains(dateText),
+                                isToday = enabled && date == today,
+                                isSelected = enabled && date == selectedDate,
+                                isMultiSelected = enabled && multiSelectedDates.contains(date),
+                                enabled = enabled,
+                                cellSize = cellSize,
+                                onClick = { if (enabled) onDateSelected(date) }
+                            )
+                        }
                     }
                 }
             }
@@ -805,6 +832,7 @@ fun CheckInDayBox(
     isSelected: Boolean,
     isMultiSelected: Boolean,
     enabled: Boolean,
+    cellSize: Dp,
     onClick: () -> Unit
 ) {
     val bg = when {
@@ -821,7 +849,7 @@ fun CheckInDayBox(
 
     Box(
         modifier = Modifier
-            .size(16.dp)
+            .size(cellSize)
             .background(bg, RoundedCornerShape(4.dp))
             .then(borderModifier)
             .clickable(enabled = enabled, onClick = onClick)
