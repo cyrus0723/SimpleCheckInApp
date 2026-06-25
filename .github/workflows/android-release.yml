@@ -10,7 +10,12 @@ permissions:
 
 jobs:
   release:
+    name: Build APK and publish release
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: SimpleCheckInApp
 
     steps:
       - name: Checkout
@@ -22,21 +27,29 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk "SimpleCheckInApp-${GITHUB_REF_NAME}-debug.apk"
+        run: cp app/build/outputs/apk/debug/app-debug.apk "../SimpleCheckInApp-${GITHUB_REF_NAME}-debug.apk"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "SimpleCheckInApp ${GITHUB_REF_NAME}"
+          name: "SimpleCheckInApp ${{ github.ref_name }}"
           body: |
             - 修正热力图默认显示到今天，减少右侧空白
             - 增加状态栏安全间距并调整首页垂直布局
             - 在首页增加最近一次打卡、距离上次打卡、平均打卡间隔三项统计
-          files: "SimpleCheckInApp-${GITHUB_REF_NAME}-debug.apk"
+          files: "SimpleCheckInApp-${{ github.ref_name }}-debug.apk"
