@@ -237,6 +237,20 @@ fun CheckInApp(
         }
     }
 
+    fun deleteCurrentTopic() {
+        if (topics.size <= 1) {
+            renameTopicError = "至少保留一个打卡主题"
+            return
+        }
+
+        val nextTopics = topics.filterNot { it.id == selectedTopicId }
+        val nextTopic = nextTopics.first()
+        topics = nextTopics
+        saveTopics(nextTopics)
+        showEditDialog = false
+        switchTopic(nextTopic.id)
+    }
+
     fun createTopic() {
         val name = newTopicName.trim()
         when {
@@ -300,7 +314,8 @@ fun CheckInApp(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .background(Color(0xFFF1FAF3))
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
@@ -311,22 +326,24 @@ fun CheckInApp(
                     Column {
                         Text(
                             text = "简单打卡",
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = currentTopic.name,
+                            text = "每一次打卡，都是自律的见证",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF666666)
+                            color = Color(0xFF777D78)
                         )
                     }
                     OutlinedButton(
                         onClick = { showEditDialog = true },
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(20.dp)
                     ) {
-                        Text(if (multiSelectMode) "编辑(${multiSelectedDates.size})" else "编辑")
+                        Text(if (multiSelectMode) "✎ 编辑(${multiSelectedDates.size})" else "✎ 编辑")
                     }
                 }
+
+                Spacer(modifier = Modifier.height(20.dp))
 
                 TopicSwitcherPanel(
                     topics = topics,
@@ -349,13 +366,14 @@ fun CheckInApp(
                         ) {
                             Text(
                                 text = "记录热力图",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = "已打卡 ${visibleDates.size} 次",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Color(0xFF888888)
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFF33B56F),
+                                fontWeight = FontWeight.Bold
                             )
                         }
 
@@ -420,7 +438,7 @@ fun CheckInApp(
                         .fillMaxWidth()
                         .height(64.dp)
                 ) {
-                    Text(text = if (hasCheckedToday) "今日已打卡" else "今日打卡")
+                    Text(text = if (hasCheckedToday) "✓ 今日已打卡" else "✓ 今日打卡")
                 }
 
                 Spacer(modifier = Modifier.weight(0.75f))
@@ -445,6 +463,8 @@ fun CheckInApp(
                 renameTopicError = null
             },
             onRenameTopic = { renameCurrentTopic() },
+            canDeleteTopic = topics.size > 1,
+            onDeleteTopic = { deleteCurrentTopic() },
             onNewTopicNameChange = {
                 newTopicName = it
                 topicNameError = null
@@ -510,6 +530,8 @@ fun EditDialog(
     selectedCount: Int,
     onRenameTopicNameChange: (String) -> Unit,
     onRenameTopic: () -> Unit,
+    canDeleteTopic: Boolean,
+    onDeleteTopic: () -> Unit,
     onNewTopicNameChange: (String) -> Unit,
     onCreateTopic: () -> Unit,
     onStartDateChange: (String) -> Unit,
@@ -556,6 +578,17 @@ fun EditDialog(
                     ) {
                         Text("保存")
                     }
+                }
+
+                OutlinedButton(
+                    onClick = onDeleteTopic,
+                    enabled = canDeleteTopic,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                ) {
+                    Text(if (canDeleteTopic) "删除当前主题" else "至少保留一个主题")
                 }
 
                 Row(
@@ -702,15 +735,19 @@ fun YearHeatMap(
     multiSelectedDates: Set<LocalDate>,
     onDateSelected: (LocalDate) -> Unit
 ) {
-    val totalDays = ChronoUnit.DAYS.between(startDate, today).toInt() + 1
-    val dates = (0 until totalDays).map { startDate.plusDays(it.toLong()) }
+    val daysBeforeStartWeek = startDate.dayOfWeek.value - 1L
+    val daysAfterEndWeek = 7L - today.dayOfWeek.value
+    val gridStartDate = startDate.minusDays(daysBeforeStartWeek)
+    val gridEndDate = today.plusDays(daysAfterEndWeek)
+    val totalDays = ChronoUnit.DAYS.between(gridStartDate, gridEndDate).toInt() + 1
+    val dates = (0 until totalDays).map { gridStartDate.plusDays(it.toLong()) }
     val weeks = dates.chunked(7)
     val heatmapScrollState = rememberScrollState()
     val maxScroll = heatmapScrollState.maxValue
     val monthLabels = weeks.mapIndexed { index, week ->
         val labelDate = when {
-            index == 0 -> week.first()
-            else -> week.firstOrNull { it.dayOfMonth == 1 }
+            index == 0 -> week.firstOrNull { !it.isBefore(startDate) } ?: startDate
+            else -> week.firstOrNull { !it.isBefore(startDate) && !it.isAfter(today) && it.dayOfMonth == 1 }
         }
         labelDate?.let { "${it.monthValue}月" } ?: ""
     }
@@ -745,12 +782,14 @@ fun YearHeatMap(
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     week.forEach { date ->
                         val dateText = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                        val enabled = !date.isBefore(startDate) && !date.isAfter(today)
                         CheckInDayBox(
-                            checked = checkInDates.contains(dateText),
-                            isToday = date == today,
-                            isSelected = date == selectedDate,
-                            isMultiSelected = multiSelectedDates.contains(date),
-                            onClick = { onDateSelected(date) }
+                            checked = enabled && checkInDates.contains(dateText),
+                            isToday = enabled && date == today,
+                            isSelected = enabled && date == selectedDate,
+                            isMultiSelected = enabled && multiSelectedDates.contains(date),
+                            enabled = enabled,
+                            onClick = { if (enabled) onDateSelected(date) }
                         )
                     }
                 }
@@ -765,9 +804,14 @@ fun CheckInDayBox(
     isToday: Boolean,
     isSelected: Boolean,
     isMultiSelected: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = if (checked) Color(0xFF8AD0A6) else Color(0xFFEFEFEF)
+    val bg = when {
+        !enabled -> Color.Transparent
+        checked -> Color(0xFF8AD0A6)
+        else -> Color(0xFFEFEFEF)
+    }
     val borderModifier = when {
         isMultiSelected -> Modifier.border(2.dp, Color(0xFF1976D2), RoundedCornerShape(4.dp))
         isSelected -> Modifier.border(2.dp, Color(0xFF222222), RoundedCornerShape(4.dp))
@@ -780,7 +824,7 @@ fun CheckInDayBox(
             .size(16.dp)
             .background(bg, RoundedCornerShape(4.dp))
             .then(borderModifier)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
     )
 }
 
