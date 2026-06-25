@@ -176,8 +176,11 @@ fun CheckInApp(
     var recordStartDate by remember { mutableStateOf(loadStartDate(selectedTopicId).coerceAtMost(today)) }
     var startDateInput by remember { mutableStateOf(recordStartDate.format(DateTimeFormatter.ISO_LOCAL_DATE)) }
     var startDateError by remember { mutableStateOf<String?>(null) }
+    var renameTopicName by remember { mutableStateOf("") }
+    var renameTopicError by remember { mutableStateOf<String?>(null) }
     var newTopicName by remember { mutableStateOf("") }
     var topicNameError by remember { mutableStateOf<String?>(null) }
+    var showEditDialog by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
     var importInput by remember { mutableStateOf("2025年6月1,3,5,6,7日") }
     var importError by remember { mutableStateOf<String?>(null) }
@@ -193,6 +196,11 @@ fun CheckInApp(
         filterDatesSince(checkInDates, recordStartDate, today)
     }
     val visibleDayCount = ChronoUnit.DAYS.between(recordStartDate, today).toInt() + 1
+
+    LaunchedEffect(selectedTopicId, topics) {
+        renameTopicName = currentTopic.name
+        renameTopicError = null
+    }
 
     fun saveNewDates(newDates: Set<String>) {
         checkInDates = newDates
@@ -213,6 +221,22 @@ fun CheckInApp(
         multiSelectedDates = emptySet()
     }
 
+    fun renameCurrentTopic() {
+        val name = renameTopicName.trim()
+        when {
+            name.isBlank() -> renameTopicError = "请输入新的主题名称"
+            topics.any { it.id != selectedTopicId && it.name == name } -> renameTopicError = "这个主题名称已经存在"
+            else -> {
+                val nextTopics = topics.map { topic ->
+                    if (topic.id == selectedTopicId) topic.copy(name = name) else topic
+                }
+                topics = nextTopics
+                saveTopics(nextTopics)
+                renameTopicError = null
+            }
+        }
+    }
+
     fun createTopic() {
         val name = newTopicName.trim()
         when {
@@ -228,6 +252,7 @@ fun CheckInApp(
                 saveTopics(nextTopics)
                 newTopicName = ""
                 topicNameError = null
+                showEditDialog = false
                 switchTopic(newTopic.id)
             }
         }
@@ -275,71 +300,48 @@ fun CheckInApp(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "简单打卡",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "当前主题：${currentTopic.name} · 自 ${recordStartDate} 起已打卡 ${visibleDates.size} 次",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFF666666)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "简单打卡",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = currentTopic.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF666666)
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { showEditDialog = true },
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(if (multiSelectMode) "编辑(${multiSelectedDates.size})" else "编辑")
+                    }
+                }
 
                 TopicSwitcherPanel(
                     topics = topics,
                     selectedTopicId = selectedTopicId,
-                    newTopicName = newTopicName,
-                    topicNameError = topicNameError,
-                    onTopicSelected = { switchTopic(it) },
-                    onNewTopicNameChange = {
-                        newTopicName = it
-                        topicNameError = null
-                    },
-                    onCreateTopic = { createTopic() }
+                    onTopicSelected = { switchTopic(it) }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = {
-                        if (!hasCheckedToday) {
-                            saveNewDates(checkInDates + todayText)
-                            selectedDate = today
-                        }
-                    },
-                    enabled = !hasCheckedToday,
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF33B56F),
-                        disabledContainerColor = Color(0xFFB9DCC7)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(58.dp)
-                ) {
-                    Text(text = if (hasCheckedToday) "今日「${currentTopic.name}」已打卡" else "今日打卡：${currentTopic.name}")
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -351,26 +353,13 @@ fun CheckInApp(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "绿色=已打卡，灰色=未打卡",
+                                text = "已打卡 ${visibleDates.size} 次",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Color(0xFF888888)
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        StartDateEditor(
-                            value = startDateInput,
-                            error = startDateError,
-                            visibleDayCount = visibleDayCount,
-                            onValueChange = {
-                                startDateInput = it
-                                startDateError = null
-                            },
-                            onApply = { applyStartDate() }
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         YearHeatMap(
                             checkInDates = checkInDates,
@@ -392,57 +381,105 @@ fun CheckInApp(
                             }
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        BulkActionsPanel(
-                            multiSelectMode = multiSelectMode,
-                            selectedCount = multiSelectedDates.size,
-                            onImportClick = { showImportDialog = true },
-                            onToggleMultiSelect = {
-                                multiSelectMode = !multiSelectMode
-                                multiSelectedDates = emptySet()
-                            },
-                            onSaveSelected = {
-                                val keys = multiSelectedDates.map {
-                                    it.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                                }.toSet()
-                                saveNewDates(checkInDates + keys)
-                                selectedDate = multiSelectedDates.maxOrNull() ?: selectedDate
-                                multiSelectedDates = emptySet()
-                                multiSelectMode = false
-                            }
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        SelectedDatePanel(
-                            selectedDate = selectedDate,
-                            checked = selectedDateChecked,
-                            onAdd = { saveNewDates(checkInDates + selectedDateText) },
-                            onDelete = { saveNewDates(checkInDates - selectedDateText) }
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        CheckInStats(checkInDates = visibleDates, today = today)
+                        if (multiSelectMode) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "多选中：已选择 ${multiSelectedDates.size} 天。点击编辑可保存。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF1976D2)
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedButton(
-                    onClick = { exportCheckInData(context, checkInDates, currentTopic.name) },
-                    shape = RoundedCornerShape(16.dp),
+                SelectedDatePanel(
+                    selectedDate = selectedDate,
+                    checked = selectedDateChecked,
+                    onAdd = { saveNewDates(checkInDates + selectedDateText) },
+                    onDelete = { saveNewDates(checkInDates - selectedDateText) }
+                )
+
+                Spacer(modifier = Modifier.weight(0.25f))
+
+                Button(
+                    onClick = {
+                        if (!hasCheckedToday) {
+                            saveNewDates(checkInDates + todayText)
+                            selectedDate = today
+                        }
+                    },
+                    enabled = !hasCheckedToday,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF33B56F),
+                        disabledContainerColor = Color(0xFFB9DCC7)
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .height(64.dp)
                 ) {
-                    Text(text = "导出数据")
+                    Text(text = if (hasCheckedToday) "今日已打卡" else "今日打卡")
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.weight(0.75f))
             }
         }
+    }
+
+    if (showEditDialog) {
+        EditDialog(
+            currentTopic = currentTopic,
+            renameTopicName = renameTopicName,
+            renameTopicError = renameTopicError,
+            newTopicName = newTopicName,
+            topicNameError = topicNameError,
+            startDateInput = startDateInput,
+            startDateError = startDateError,
+            visibleDayCount = visibleDayCount,
+            multiSelectMode = multiSelectMode,
+            selectedCount = multiSelectedDates.size,
+            onRenameTopicNameChange = {
+                renameTopicName = it
+                renameTopicError = null
+            },
+            onRenameTopic = { renameCurrentTopic() },
+            onNewTopicNameChange = {
+                newTopicName = it
+                topicNameError = null
+            },
+            onCreateTopic = { createTopic() },
+            onStartDateChange = {
+                startDateInput = it
+                startDateError = null
+            },
+            onApplyStartDate = { applyStartDate() },
+            onImportClick = {
+                showEditDialog = false
+                showImportDialog = true
+            },
+            onExportClick = { exportCheckInData(context, checkInDates, currentTopic.name) },
+            onToggleMultiSelect = {
+                val nextMode = !multiSelectMode
+                multiSelectMode = nextMode
+                multiSelectedDates = emptySet()
+                if (nextMode) {
+                    showEditDialog = false
+                }
+            },
+            onSaveSelected = {
+                val keys = multiSelectedDates.map {
+                    it.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                }.toSet()
+                saveNewDates(checkInDates + keys)
+                selectedDate = multiSelectedDates.maxOrNull() ?: selectedDate
+                multiSelectedDates = emptySet()
+                multiSelectMode = false
+                showEditDialog = false
+            },
+            onDismiss = { showEditDialog = false }
+        )
     }
 
     if (showImportDialog) {
@@ -460,80 +497,195 @@ fun CheckInApp(
 }
 
 @Composable
-fun TopicSwitcherPanel(
-    topics: List<CheckInTopic>,
-    selectedTopicId: String,
+fun EditDialog(
+    currentTopic: CheckInTopic,
+    renameTopicName: String,
+    renameTopicError: String?,
     newTopicName: String,
     topicNameError: String?,
-    onTopicSelected: (String) -> Unit,
+    startDateInput: String,
+    startDateError: String?,
+    visibleDayCount: Int,
+    multiSelectMode: Boolean,
+    selectedCount: Int,
+    onRenameTopicNameChange: (String) -> Unit,
+    onRenameTopic: () -> Unit,
     onNewTopicNameChange: (String) -> Unit,
-    onCreateTopic: () -> Unit
+    onCreateTopic: () -> Unit,
+    onStartDateChange: (String) -> Unit,
+    onApplyStartDate: () -> Unit,
+    onImportClick: () -> Unit,
+    onExportClick: () -> Unit,
+    onToggleMultiSelect: () -> Unit,
+    onSaveSelected: () -> Unit,
+    onDismiss: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "打卡主题",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("编辑 ${currentTopic.name}") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                topics.forEach { topic ->
-                    if (topic.id == selectedTopicId) {
-                        Button(
-                            onClick = { onTopicSelected(topic.id) },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF33B56F))
-                        ) {
-                            Text(topic.name)
-                        }
+                Text(
+                    text = "主题",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    OutlinedTextField(
+                        value = renameTopicName,
+                        onValueChange = onRenameTopicNameChange,
+                        singleLine = true,
+                        label = { Text("当前主题名称") },
+                        isError = renameTopicError != null,
+                        supportingText = { Text(renameTopicError ?: "可以重命名当前主题") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = onRenameTopic,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .height(52.dp)
+                    ) {
+                        Text("保存")
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    OutlinedTextField(
+                        value = newTopicName,
+                        onValueChange = onNewTopicNameChange,
+                        singleLine = true,
+                        label = { Text("新主题，例如 起飞、背单词、早睡") },
+                        isError = topicNameError != null,
+                        supportingText = { Text(topicNameError ?: "新主题会有独立数据") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = onCreateTopic,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .height(52.dp)
+                    ) {
+                        Text("创建")
+                    }
+                }
+
+                StartDateEditor(
+                    value = startDateInput,
+                    error = startDateError,
+                    visibleDayCount = visibleDayCount,
+                    onValueChange = onStartDateChange,
+                    onApply = onApplyStartDate
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onImportClick,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                    ) {
+                        Text("导入数据")
+                    }
+                    OutlinedButton(
+                        onClick = onExportClick,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                    ) {
+                        Text("导出数据")
+                    }
+                }
+
+                Text(
+                    text = if (multiSelectMode) {
+                        "多选补打卡已开启，已选择 $selectedCount 天。"
                     } else {
-                        OutlinedButton(
-                            onClick = { onTopicSelected(topic.id) },
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text(topic.name)
-                        }
+                        "开启多选后，回到热力图点选日期，再回到编辑保存。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF555555)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onToggleMultiSelect,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                    ) {
+                        Text(if (multiSelectMode) "退出多选" else "多选补打卡")
+                    }
+                    Button(
+                        onClick = onSaveSelected,
+                        enabled = multiSelectMode && selectedCount > 0,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                    ) {
+                        Text("保存所选")
                     }
                 }
             }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("完成")
+            }
+        }
+    )
+}
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                OutlinedTextField(
-                    value = newTopicName,
-                    onValueChange = onNewTopicNameChange,
-                    singleLine = true,
-                    label = { Text("新主题，例如 起飞、背单词、早睡") },
-                    isError = topicNameError != null,
-                    supportingText = {
-                        Text(topicNameError ?: "每个主题的打卡数据会独立保存")
-                    },
-                    modifier = Modifier.weight(1f)
-                )
+@Composable
+fun TopicSwitcherPanel(
+    topics: List<CheckInTopic>,
+    selectedTopicId: String,
+    onTopicSelected: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        topics.forEach { topic ->
+            if (topic.id == selectedTopicId) {
                 Button(
-                    onClick = onCreateTopic,
+                    onClick = { onTopicSelected(topic.id) },
                     shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .padding(top = 8.dp)
-                        .height(52.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF33B56F))
                 ) {
-                    Text("创建")
+                    Text(topic.name)
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { onTopicSelected(topic.id) },
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(topic.name)
                 }
             }
         }
@@ -574,9 +726,9 @@ fun YearHeatMap(
             .fillMaxWidth()
             .horizontalScroll(heatmapScrollState)
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             monthLabels.forEach { label ->
-                Box(modifier = Modifier.size(width = 20.dp, height = 18.dp)) {
+                Box(modifier = Modifier.size(width = 18.dp, height = 16.dp)) {
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelSmall,
@@ -588,9 +740,9 @@ fun YearHeatMap(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             weeks.forEach { week ->
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     week.forEach { date ->
                         val dateText = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
                         CheckInDayBox(
@@ -625,7 +777,7 @@ fun CheckInDayBox(
 
     Box(
         modifier = Modifier
-            .size(20.dp)
+            .size(16.dp)
             .background(bg, RoundedCornerShape(4.dp))
             .then(borderModifier)
             .clickable(onClick = onClick)
@@ -781,12 +933,12 @@ fun SelectedDatePanel(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F8F7))
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -822,7 +974,7 @@ fun SelectedDatePanel(
                     ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(46.dp)
+                        .height(44.dp)
                 ) {
                     Text(text = "补打卡")
                 }
@@ -833,7 +985,7 @@ fun SelectedDatePanel(
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .height(46.dp)
+                        .height(44.dp)
                 ) {
                     Text(text = "删除")
                 }
